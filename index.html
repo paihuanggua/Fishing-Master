@@ -1,1 +1,658 @@
-11111
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>无标题文档</title>
+<style>
+* {margin:0; padding:0; list-style:none;}
+body {background:pink; text-align:center;}
+#c1 {background:url(img/game_bg_2_hd.jpg); margin-top:100px;}
+</style>
+<script>
+function a2d(n){
+	return n*180/Math.PI;
+}
+function d2a(n){
+	return n*Math.PI/180;
+}
+function rnd(n,m){
+	return n+Math.floor(Math.random()*(m-n));
+}
+function loadImages(json,fn){
+	var total=0;
+	var count=0;
+	var res={};
+	for(var name in json){
+		total++;
+		var oImg=new Image();
+		oImg.src=json[name];
+		(function(name){
+			oImg.onload=function(){
+				count++;
+				res[name]=this;
+				if(total==count){
+					fn(res);
+				}
+			}
+		})(name);
+	}
+}
+function Sprite(img){
+	this.img=img;
+	this.x=0;
+	this.y=0;
+	this.rotate=0;
+	this.sx=0;
+	this.sy=0;
+	this.w=0;
+	this.h=0;
+}
+Sprite.prototype.draw=function(gd){
+	gd.save();
+	gd.translate(this.x+this.w/2,this.y+this.h/2);
+	gd.rotate(d2a(this.rotate));
+	if(Math.abs(this.rotate)>90){
+		gd.scale(1,-1);
+	}
+	gd.drawImage(
+		this.img,
+		this.sx,this.sy,this.w,this.h,//图片位置
+		-this.w/2,-this.h/2,this.w,this.h//画布上的位置
+	);
+	gd.restore();
+};
+//小鱼
+function Fish(img,type){
+	this.type=type;
+	var _fish_size=[
+		null,
+		{w: 55, h: 37},
+		{w: 78, h: 64},
+		{w: 72, h: 56},
+		{w: 77, h: 59},
+		{w: 107, h: 122}
+	];
+	Sprite.call(this,img);
+	this.w=_fish_size[type].w;
+	this.h=_fish_size[type].h;
+	this.speed=3;
+	this.frame=0;
+	this.max_frame=4;
+}
+Fish.prototype=new Sprite();
+Fish.prototype.constructor=Fish;
+Fish.prototype.move=function(){
+	//鱼摆动
+	this.frame+=0.25;
+	if(this.frame>=this.max_frame){
+		this.frame=0;
+	}
+	this.sy=parseInt(this.frame)*this.h;
+	//鱼向前游
+	var speedX=Math.sin(d2a(this.rotate+90))*this.speed;
+	var speedY=Math.cos(d2a(this.rotate+90))*this.speed;
+	this.x+=speedX;
+	this.y-=speedY;
+};
+//鲨鱼
+function Shark(img,type){
+	var _shark_size=[
+		null,
+		{w: 509, h: 270},
+		{w: 516, h: 273},
+	];
+	Sprite.call(this,img);
+	this.w=_shark_size[type].w;
+	this.h=_shark_size[type].h;
+	this.speed=6;
+	this.frame=0;
+	this.max_frame=8;
+}
+Shark.prototype=new Sprite();
+Shark.prototype.constructor=Shark;
+Shark.prototype.move=function(){
+	//鱼摆动
+	this.frame+=0.25;
+	if(this.frame>=this.max_frame){
+		this.frame=0;
+	}
+	this.sy=parseInt(this.frame)*this.h;
+	//鱼向前游
+	var speedX=Math.sin(d2a(this.rotate+90))*this.speed;
+	var speedY=Math.cos(d2a(this.rotate+90))*this.speed;
+	this.x+=speedX;
+	this.y-=speedY;
+};
+//炮
+function Cannon(img,type){
+	this.type=type;//保存type来确定子弹的type
+	this._size=[
+		null,
+		{w: 74, h: 74},
+		{w: 74, h: 76},
+		{w: 74, h: 76},
+		{w: 74, h: 83},
+		{w: 74, h: 85},
+		{w: 74, h: 90},
+		{w: 74, h: 94}
+	];
+	Sprite.call(this,img);
+	this.w=this._size[type].w;
+	this.h=this._size[type].h;
+}
+Cannon.prototype=new Sprite();
+Cannon.prototype.constructor=Cannon;
+Cannon.prototype.setType=function(img,type){
+	this.type=type;
+	this.img=img;
+	this.w=this._size[type].w;
+	this.h=this._size[type].h;
+};
+//按钮加减
+function Button(img,normal,down){
+	this.img=img;
+	this.x=0;
+	this.y=0;
+	this.status='normal';
+	this.normal=normal;
+	this.down=down;
+}
+Button.prototype.draw=function(gd){
+	gd.save();
+	if(this.status=='normal'){
+		gd.drawImage(
+			this.img,
+			this.normal.sx, this.normal.sy, this.normal.sw, this.normal.sh,
+			this.x, this.y, this.normal.sw, this.normal.sh
+		);
+	}else{
+		gd.drawImage(
+			this.img,
+			this.down.sx, this.down.sy, this.down.sw, this.down.sh,
+			this.x, this.y, this.down.sw, this.down.sh
+		);
+	}
+	gd.restore();
+};
+Button.prototype.isPointIn=function(gd,x,y){
+	gd.beginPath();
+	gd.rect(this.x, this.y, this.normal.sw, this.normal.sh);
+	return gd.isPointInPath(x, y);
+};
+
+//子弹
+function Bullet(img,type){
+	var _size=[
+		null,
+		{x:86, y:0, w:24, h:26},
+		{x:61, y:0, w:25, h:29},
+		{x:32, y:35, w:27, h:31},
+		{x:30, y:82, w:29, h:33},
+		{x:0, y:82, w:30, h:34},
+		{x:30, y:0, w:31, h:35},
+		{x:0, y:0, w:30, h:44}
+	];
+	Sprite.call(this,img);
+	this.w=_size[type].w;
+	this.h=_size[type].h;
+	this.sx=_size[type].x;
+	this.sy=_size[type].y;
+	this.speed=5;//子弹的速度大于鱼的速度
+}
+Bullet.prototype=new Sprite();
+Bullet.prototype.constructor=Bullet;
+Bullet.prototype.move=function(){
+	var speedX=Math.sin(d2a(this.rotate))*this.speed;
+	var speedY=Math.cos(d2a(this.rotate))*this.speed;
+	this.x+=speedX;
+	this.y-=speedY;
+};
+//钱
+function Coin(img,type){
+	var coin_size=[
+		null,
+		{w:60,h:60},
+		{w:60,h:60}
+	];
+	Sprite.call(this, img);
+	this.w=coin_size[type].w;
+	this.h=coin_size[type].h;
+	this.frame=0;
+	this.max_frame=10;
+}
+Coin.prototype=new Sprite();
+Coin.prototype.constructor=Coin;
+Coin.prototype.move=function(){
+	//钱转
+	this.frame++;
+	if(this.frame>=this.max_frame){
+		this.frame=0;
+	}
+	this.sy=this.h*this.frame;
+	//钱向左下角走
+	var targetX=93;
+	var targetY=575;
+	var speedX=(targetX-this.x)/20;
+	var speedY=(targetY-this.y)/20;
+	this.x+=speedX;
+	this.y+=speedY;
+};
+
+//鱼网
+function Fishweb(img,type){
+	var fishWeb_size=[
+		null,
+		{x:334, y:374, w:86, h:86},
+		{x:15, y:415, w:108, h:106},
+		{x:179, y:371, w:126, h:124},
+		{x:259, y:198, w:145, h:145},
+		{x:2, y:245, w:162, h:154},
+		{x:243, y:0, w:180, h:180},
+		{x:22, y:22, w:200, h:200}
+	];
+	Sprite.call(this,img);
+	this.w=fishWeb_size[type].w;
+	this.h=fishWeb_size[type].h;
+	this.sx=fishWeb_size[type].x;
+	this.sy=fishWeb_size[type].y;
+}
+Fishweb.prototype=new Sprite();
+Fishweb.prototype.constructor=Fishweb;
+//碰撞检测
+function collTest(obj1, obj2){
+	var l1=obj1.x;
+	var t1=obj1.y;
+	var r1=obj1.x+obj1.w;
+	var b1=obj1.y+obj1.h;
+	
+	var l2=obj2.x;
+	var t2=obj2.y;
+	var r2=obj2.x+obj2.w;
+	var b2=obj2.y+obj2.h;
+	
+	if(r1<l2 || l1>r2 || b1<t2 || t1>b2){//没碰上
+		return false;
+	}
+	else{
+		return true;
+	}
+}
+window.onload=function(){
+	var oC=document.getElementById('c1');
+	var gd=oC.getContext('2d');
+	
+	
+	loadImages({
+		fish1:'img/fish1.png',
+		fish2:'img/fish2.png',
+		fish3:'img/fish3.png',
+		fish4:'img/fish4.png',
+		fish5:'img/fish5.png',	
+		shark1:'img/shark1.png',
+		shark2:'img/shark2.png',
+		cannon1:'img/cannon1.png',
+		cannon2:'img/cannon2.png',
+		cannon3:'img/cannon3.png',
+		cannon4:'img/cannon4.png',
+		cannon5:'img/cannon5.png',
+		cannon6:'img/cannon6.png',
+		cannon7:'img/cannon7.png',	
+		bottom:'img/bottom.png',
+		bullet:'img/bullet.png',
+		coin1:'img/coinAni1.png',
+		coin2:'img/coinAni2.png',
+		web:'img/web.png',
+		number_black:'img/number_black.png'
+	},function(json){
+		//开关，控制按钮点击与大子弹的切换效果
+		var bOk=true;
+		//炮台
+		var bottom=new Sprite(json.bottom);
+		bottom.w=765;
+		bottom.h=71;
+		bottom.x=15;
+		bottom.y=533;
+		//炮
+		var cannon=new Cannon(json.cannon1, 1);
+		cannon.x=400;
+		cannon.y=536;
+		//炮转
+		oC.onmousemove=function(ev){
+			var a=ev.pageX-oC.offsetLeft-cannon.x-cannon.w/2;
+			var b=ev.pageY-oC.offsetTop-(oC.height-cannon.h/2);
+			var ang=a2d(Math.atan2(b,a));
+			cannon.rotate=ang+90;
+		};
+		
+		
+		
+		//开炮并存子弹
+		var arrBullet=[];
+		oC.onclick=function(){
+			if(bOk){
+				var b=new Bullet(json.bullet,cannon.type);
+				b.x=cannon.x+(cannon.w-b.w)/2;
+				b.y=cannon.y+(cannon.h-b.h)/2;
+				b.rotate=cannon.rotate;
+				arrBullet.push(b);
+			}else{
+				console.log(1);
+				return false;
+			}
+		};
+		
+		//按钮(加减炮和子弹)
+			//加
+		var oBtnPlus=new Button(
+			json.bottom,
+			{sx: 47, sy: 75, sw: 36, sh: 28},
+			{sx: 3, sy: 75, sw: 36, sh: 28}
+		);
+		oBtnPlus.x=472;
+		oBtnPlus.y=566;
+			//减
+		var oBtnMinus=new Button(
+			json.bottom,
+			{sx: 135, sy: 75, sw: 36, sh: 28},
+			{sx: 91, sy: 75, sw: 36, sh: 28}
+		);
+		oBtnMinus.x=372;
+		oBtnMinus.y=566;
+		//按钮点击
+		document.onmousedown=function(ev){
+			var x=ev.pageX-oC.offsetLeft;
+			var y=ev.pageY-oC.offsetTop;
+			if(oBtnPlus.isPointIn(gd,x,y)){
+				bOk=false;
+				oBtnPlus.status='down';
+				var type=cannon.type+1;
+				if(type>7)type=1;
+				cannon.setType(json['cannon'+type],type);
+			}
+			if(oBtnMinus.isPointIn(gd, x, y)){
+				bOk=false;
+				oBtnMinus.status='down';
+				var type=cannon.type-1;
+				if(type<1)type=7;
+				cannon.setType(json['cannon'+type], type);
+			}
+		};
+		document.onmouseup=function(){
+			oBtnPlus.status='normal';
+			oBtnMinus.status='normal';
+			setTimeout(function(){
+				bOk=true;
+			},50);
+		}
+		
+		
+		
+		//鱼
+		var arrFish=[];//小鱼
+		var arrShark=[];//鲨鱼
+		var timer=setInterval(function(){
+			var x=Math.random();
+			if(x<0.3){
+				var n=rnd(1,6);
+				var f=new Fish(json['fish'+n],n);
+				arrFish.push(f);
+				if(Math.random()<0.5){
+					f.x=-50;
+					f.y=rnd(10,oC.height-130);
+				}else{
+					f.x=oC.width+50;
+					f.y=rnd(10,oC.height-130);
+					f.rotate=-180;
+				}
+			}else if(x>0.99){
+				var n=rnd(1,3);
+				var s=new Shark(json['shark'+n],n);
+				arrShark.push(s);
+				if(Math.random()<0.5){
+					s.x=-520;
+					s.y=rnd(5,(oC.height-250));
+				}else{
+					s.x=oC.width+520;
+					s.y=rnd(5,(oC.height-250));
+					s.rotate=-180;
+				}
+				
+			}
+		},50);
+		//钱 
+		var arrCoin=[];
+		//鱼网
+		var arrFishweb=[];
+		
+		
+		//定时器——运动
+		setInterval(function(){
+			
+			//鱼动
+			for(var i=0;i<arrFish.length;i++){
+				arrFish[i].move();
+			}
+			//检测鱼游出去--删掉
+			for(var i=0;i<arrFish.length;i++){
+				if(arrFish[i].x<-50 || arrFish[i].x>oC.width+50 || arrFish[i].y<-50 || arrFish[i].y>oC.height+50){
+					arrFish.splice(i--,1);
+				}
+			}
+			//鲨动
+			for(var i=0;i<arrShark.length;i++){
+				arrShark[i].move();
+			}
+			//检测鲨鱼游出去--删掉
+			for(var i=0;i<arrShark.length;i++){
+				if(arrShark[i].x<-530 || arrShark[i].x>oC.width+530 || arrShark[i].y<-530 || arrShark[i].y>oC.height+530){
+					arrShark.splice(i--,1);
+				}
+			}
+			//子弹动
+			for(var i=0;i<arrBullet.length;i++){
+				arrBullet[i].move();
+			}
+			//检测子弹飞出去--删掉
+			for(var i=0;i<arrBullet.length;i++){
+				if(arrBullet[i].x<-50 || arrBullet[i].y<-50 || arrBullet[i].x>oC.width+50 || arrBullet[i].y>oC.height+50){
+					arrBullet.splice(i--,1);
+				}
+			}
+			
+			//检测——小鱼、子弹相撞
+			var ran_num=Math.random();
+			for(var i=0;i<arrFish.length;i++){
+				for(var j=0;j<arrBullet.length;j++){
+					if(collTest(arrFish[i], arrBullet[j])){
+						if(ran_num<0.5){//打到鱼
+							//出渔网
+							var web=new Fishweb(json.web,cannon.type);
+							web.x=arrFish[i].x+(arrFish[i].w-web.w)/2;
+							web.y=arrFish[i].y+(arrFish[i].h-web.h)/2;
+							console.log(web.w/2);
+							arrFishweb.push(web);
+							console.log(arrFishweb);
+							//出钱
+							var fishType=arrFish[i].type;//钱的数量
+							if(fishType>3){
+								var c=new Coin(json.coin2, 2);
+							}else{
+								var c=new Coin(json.coin1, 1);
+							}
+							arrCoin.push(c);
+							c.x=arrFish[i].x+(arrFish[i].w-c.w)/2;
+							c.y=arrFish[i].y+(arrFish[i].h-c.h)/2;
+							//鱼、炮弹消失
+							arrFish.splice(i--, 1);
+							arrBullet.splice(j--, 1);
+						}else{
+							//出渔网
+							var web=new Fishweb(json.web,cannon.type);
+							web.x=arrFish[i].x+(arrFish[i].w-web.w)/2;
+							web.y=arrFish[i].y+(arrFish[i].h-web.h)/2;
+							arrFishweb.push(web);
+							//炮弹消失
+							arrBullet.splice(j--, 1);
+						}
+					}
+				}
+			}
+			//检测——鲨鱼、子弹相撞
+			//钱走起来
+			for(var i=0;i<arrCoin.length;i++){
+				arrCoin[i].move();
+			}
+			//钱到左下角，消失
+			for(var i=0;i<arrCoin.length;i++){
+				if(Math.abs(arrCoin[i].x-93)<30 && Math.abs(arrCoin[i].y-575)<30){
+					arrCoin.splice(i--, 1);
+				}
+			}
+			
+		},30);
+		//定时器——画
+		setInterval(function(){//越后画的层级越高
+			gd.clearRect(0, 0, oC.width, oC.height);
+			//画鱼
+			for(var i=0;i<arrFish.length;i++){
+				arrFish[i].draw(gd);
+			}
+			//画鲨鱼
+			for(var i=0;i<arrShark.length;i++){
+				arrShark[i].draw(gd);
+			}
+			//画子弹
+			for(var i=0;i<arrBullet.length;i++){
+				arrBullet[i].draw(gd);
+			}
+			//画炮台
+			bottom.draw(gd);
+			//画加减
+			oBtnPlus.draw(gd);
+			oBtnMinus.draw(gd);
+			//画炮
+			cannon.draw(gd);
+			
+			//画钱
+			for(var i=0;i<arrCoin.length;i++){
+				arrCoin[i].draw(gd);
+			}
+			//画渔网
+			if(arrFishweb.length){
+				for(var i=0;i<arrFishweb.length;i++){
+					arrFishweb[i].draw(gd);
+				}
+			}
+		},30);
+		setInterval(function(){
+			//减少鱼网
+			arrFishweb.shift();
+		},300);
+		
+		
+	});
+	
+};
+</script>
+</head>
+<body>
+<canvas id="c1" width="800" height="600"></canvas>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
